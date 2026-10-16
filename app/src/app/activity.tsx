@@ -4,7 +4,7 @@ import { SectionHeader, Segmented } from '../components/ui';
 import { usePrefs, type Prefs } from '../lib/prefs';
 import { makeStyles } from '../lib/themeContext';
 
-/** Which pending questions and results show in the chat. Every change applies at once. */
+/** How finished work and pending questions/results show in chat. Changes apply at once. */
 export default function ActivityScreen() {
   const s = useStyles();
   const prefs = usePrefs((st) => st.prefs);
@@ -20,9 +20,10 @@ export default function ActivityScreen() {
         { value: 'off', label: 'Hidden' },
       ]} />
       <Text style={s.note}>
-        {prefs.activity === 'full' ? 'Every question and result the agent posts shows in the chat.'
-          : prefs.activity === 'one' ? 'Only the latest unanswered question shows at a time. Pending results share that slot.'
-            : 'Questions and results are kept out of the chat.'}
+        Working steps stay hidden while your agent is busy.
+        {prefs.activity === 'full' ? ' Afterwards, tap the steps summary to read everything it did. Every pending question and result appears in the chat.'
+          : prefs.activity === 'one' ? ' Afterwards, only the latest working step appears. Only the newest pending question or result appears at a time; it replaces the previous one.'
+            : ' Working summaries and pending questions and results are hidden. Choose All to read the working steps later.'}
         {' Answered and expired cards stay in the chat. Approval requests always appear, whatever this is set to.'}
       </Text>
     </Screen>

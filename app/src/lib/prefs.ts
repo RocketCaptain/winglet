@@ -7,7 +7,7 @@ export type Prefs = {
   accent: AccentName;
   /** Bubbles: your messages in accent bubbles, replies unboxed. Compact: everything left-aligned. */
   layout: 'bubbles' | 'compact';
-  /** Pending questions/results shown in chat. Approvals and historical cards always appear. */
+  /** Pending cards and finished work shown in chat. Approvals/history always appear; live steps never do. */
   activity: 'full' | 'one' | 'off';
   /** "system" follows the phone's accessibility setting. */
   motion: 'system' | 'reduce' | 'full';

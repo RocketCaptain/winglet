@@ -18,7 +18,7 @@ import { afterOlderPage, atStart, canLoadOlder, newPaging } from '../lib/history
 import { chatMessages, filterInboxMessages, groupActivity, isActivity, type Entry } from '../lib/messages';
 import { useModelSheet } from '../lib/modelSheet';
 import { easeOut, spring, useReducedMotion } from '../lib/motion';
-import { usePrefs } from '../lib/prefs';
+import { usePrefs, type Prefs } from '../lib/prefs';
 import { homeChat, isTyping, useApp, useServerState } from '../lib/store';
 import { plainText } from '../lib/text';
 import { FIXED } from '../lib/theme';
@@ -248,8 +248,15 @@ function MessageList({ server, chatId, messages, loaded, typing, top, bottom, on
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
-    // Hermes's backend activity (tool calls, status notes) folds into one "…" entry between the replies.
-    const entries = groupActivity(filterInboxMessages(messages, inbox, activity), typing);
+    // Cards use the preference's pending slot. Grouping keeps every step; only the view hides rows.
+    const entries = groupActivity(filterInboxMessages(messages, inbox, activity), typing)
+      .filter((e) => activity !== 'off' || e.kind !== 'activity');
+    // A card or reply can split progress into several runs while the same turn is still working.
+    let turnStart = -1;
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const e = entries[i];
+      if (e.kind === 'msg' && e.m.role === 'user') { turnStart = i; break; }
+    }
     const idOf = (e: Entry) => (e.kind === 'msg' ? e.m.id : e.id);
     const timeOf = (e: Entry) => (e.kind === 'msg' ? e.m.created_at : e.items[0].created_at);
     const days = entries.map((e) => dayKey(timeOf(e)));
@@ -269,7 +276,7 @@ function MessageList({ server, chatId, messages, loaded, typing, top, bottom, on
         out.push({ kind: 'day', key, label });
       }
       if (e.kind === 'activity') {
-        out.push({ kind: 'activity', key: `activity-${e.id}`, items: e.items, working: typing && i === entries.length - 1 });
+        out.push({ kind: 'activity', key: `activity-${e.id}`, items: e.items, working: typing && i > turnStart });
         return;
       }
       out.push({
@@ -406,7 +413,7 @@ function MessageList({ server, chatId, messages, loaded, typing, top, bottom, on
         data={rows}
         keyExtractor={(r) => r.key}
         renderItem={({ item }) => item.kind === 'day' ? <DayChip label={item.label} /> : item.kind === 'activity' ? (
-          <ActivityRow items={item.items} working={item.working} latestOnly={activity === 'one'} flash={flash !== null && item.items.some((m) => m.id === flash)} />
+          <ActivityRow items={item.items} working={item.working} mode={activity} flash={flash !== null && item.items.some((m) => m.id === flash)} />
         ) : (
           <MessageRow server={server} message={item.m} first={item.first} last={item.last} live={item.live} fresh={item.fresh}
             layout={layout} flash={flash === item.m.id} actions={actions}
@@ -424,7 +431,7 @@ function MessageList({ server, chatId, messages, loaded, typing, top, bottom, on
         }}
         onEndReached={loadOlder}
         onEndReachedThreshold={0.4}
-        ListHeaderComponent={typing && rows[0]?.kind !== 'activity' ? <TypingRow server={server} /> : null}
+        ListHeaderComponent={activity !== 'off' && typing && rows[0]?.kind !== 'activity' ? <TypingRow server={server} /> : null}
         ListFooterComponent={olderBusy ? (
           <View style={s.olderRow}><ActivityIndicator color={t.colors.textSecondary} accessibilityLabel="Loading older messages" /></View>
         ) : startShown ? <View style={s.olderRow}><Text style={s.olderText}>Start of the conversation</Text></View> : null}
@@ -760,32 +767,32 @@ function Cursor({ onAccent }: { onAccent: boolean }) {
 }
 
 /**
- * Background steps folded into one row, or just the latest step always visible.
- * Tap the full row to see the steps; by default only the replies show.
+ * No step text until the turn ends. Then show a summary that opens every step, or the latest line.
+ * The list handles off mode; grouping never discards steps for a display preference.
  */
-const ActivityRow = memo(function ActivityRow({ items, working, latestOnly, flash }: { items: Message[]; working: boolean; latestOnly: boolean; flash: boolean }) {
+const ActivityRow = memo(function ActivityRow({ items, working, mode, flash }: { items: Message[]; working: boolean; mode: Prefs['activity']; flash: boolean }) {
   const t = useTheme();
   const s = useStyles();
   const [open, setOpen] = useState(false);
   // Jumped to a step in here (from search or a reply): show it.
   useEffect(() => { if (flash) setOpen(true); }, [flash]);
-  if (latestOnly) return (
+  if (mode === 'one' && !working) return (
     <View style={[s.lane, s.activity]}>
-      <Text selectable numberOfLines={1} style={[s.activityLine, s.activityLatest]}>{items[0].text}</Text>
+      <Text selectable numberOfLines={1} style={[s.activityLine, s.activityLatest]}>{items[items.length - 1].text}</Text>
     </View>
   );
   const n = items.length;
   return (
     <View style={[s.lane, s.activity]}>
-      <Tap feedback="selection" scaleTo={0.96} onPress={() => setOpen((o) => !o)} style={s.activityPill} accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${working ? 'Working. ' : ''}${n} background ${n === 1 ? 'step' : 'steps'}. ${open ? 'Hide' : 'Show'}`}>
+      <Tap feedback="selection" scaleTo={0.96} disabled={working} onPress={() => setOpen((o) => !o)} style={s.activityPill} accessibilityState={{ expanded: !working && open, disabled: working }}
+        accessibilityLabel={working ? 'Working' : `${n} background ${n === 1 ? 'step' : 'steps'}. ${open ? 'Hide' : 'Show'}`}>
         {working ? <Dots /> : (
           <View style={s.activityDots}>{[0, 1, 2].map((i) => <View key={i} style={[s.activityDot, { backgroundColor: t.colors.textSecondary }]} />)}</View>
         )}
         <Text style={s.activityText}>{working ? 'Working' : `${n} ${n === 1 ? 'step' : 'steps'}`}</Text>
-        <ChevronDown size={14} color={t.colors.textSecondary} style={open ? { transform: [{ rotate: '180deg' }] } : undefined} />
+        {!working ? <ChevronDown size={14} color={t.colors.textSecondary} style={open ? { transform: [{ rotate: '180deg' }] } : undefined} /> : null}
       </Tap>
-      {open ? (
+      {!working && open ? (
         <Animated.View entering={FadeIn.duration(160)} style={s.activityList}>
           {items.map((m) => <Text key={m.id} selectable style={s.activityLine}>{m.text}</Text>)}
         </Animated.View>

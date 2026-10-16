@@ -116,23 +116,24 @@ export function groupActivity(messages: readonly Message[], typing = false): Ent
 }
 
 /**
- * Only pending questions and results share the activity preference's slot, in transcript order.
+ * Filter cards only: the newest pending question/result in transcript order owns the one-slot,
+ * even when older cards are still unanswered. Off hides all pending questions/results.
  * Approvals always stay visible and never take the slot. Resolved/expired cards stay in history;
  * missing inbox data keeps the message visible until its item arrives.
  */
 export function filterInboxMessages(messages: readonly Message[], inbox: Readonly<Record<string, InboxItem>> | undefined, mode: Prefs['activity'] = 'full'): Message[] {
-  let latest: string | undefined;
-  if (mode === 'one') {
-    for (const m of messages) {
-      const item = m.meta?.inbox_id ? inbox?.[m.meta.inbox_id] : undefined;
-      if (item && item.kind !== 'approval' && item.status === 'pending') latest = item.id;
-    }
-  }
-  return messages.filter((m) => {
+  const visible: Message[] = [];
+  let occupied = false;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
     const item = m.meta?.inbox_id ? inbox?.[m.meta.inbox_id] : undefined;
-    return !item || item.kind === 'approval' || item.status !== 'pending'
-      || mode === 'full' || (mode === 'one' && item.id === latest);
-  });
+    if (item && item.kind !== 'approval' && item.status === 'pending') {
+      if (mode === 'off' || (mode === 'one' && occupied)) continue;
+      occupied = true;
+    }
+    visible.push(m);
+  }
+  return visible.reverse();
 }
 
 type SheetSlot = { before: readonly string[]; claimed?: string; until: number };

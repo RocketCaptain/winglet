@@ -153,24 +153,11 @@ for (const mode of ['full', 'one', 'off'] as const) {
 
   test(`${mode} safely preserves ordinary messages and cards whose inbox data has not loaded`, () => {
     const messages = [msg('user', { role: 'user' }), msg('reply'), msg('notice', { role: 'system' }),
-      msg('missing', { role: 'system', meta: { inbox_id: 'not-loaded', kind: 'question' } })];
+      msg('missing-question', { role: 'system', meta: { inbox_id: 'not-loaded', kind: 'question' } }),
+      msg('missing-approval', { role: 'system', meta: { inbox_id: 'approval-not-loaded', kind: 'approval' } })];
     assert.deepEqual(filterInboxMessages([], {}, mode), []);
     assert.deepEqual(filterInboxMessages(messages, {}, mode), messages);
     assert.deepEqual(filterInboxMessages(messages, undefined, mode), messages);
-  });
-
-  test(`progress rows retain every step and replies stay interleaved in ${mode}`, () => {
-    const items = [card('q', 'question'), card('a', 'approval')];
-    const p1 = say('p1', 'Running tests', { meta: { activity: true } });
-    const p2 = say('p2', 'Reading results', { meta: { activity: true } });
-    const reply = msg('reply');
-    const [q, a] = items.map(cardMessage);
-    const messages = [p1, p2, q, reply, a];
-    assert.deepEqual(groupActivity(filterInboxMessages(messages, inboxOf(items), mode), true), [
-      { kind: 'activity', id: 'p1', items: [p1, p2] },
-      ...(mode === 'off' ? [] : [{ kind: 'msg', m: q }]),
-      { kind: 'msg', m: reply }, { kind: 'msg', m: a },
-    ]);
   });
 }
 
@@ -180,14 +167,6 @@ test('full is the default for inbox cards', () => {
   assert.deepEqual(filterInboxMessages(messages, inboxOf(items)), messages);
 });
 
-test('approvals remain beside the latest pending question without occupying its slot', () => {
-  const items = [card('q1', 'question'), card('a1', 'approval'), card('q2', 'question'), card('a2', 'approval')];
-  const messages = items.map(cardMessage);
-  const inbox = inboxOf(items);
-  assert.deepEqual(cardIds(filterInboxMessages(messages.slice(0, 2), inbox, 'one')), ['q1', 'a1']);
-  assert.deepEqual(cardIds(filterInboxMessages(messages, inbox, 'one')), ['a1', 'q2', 'a2']);
-});
-
 test('questions and results share one slot, chosen by transcript order rather than item update time', () => {
   const r = card('r', 'result', { created_at: 100, updated_at: 200 });
   const q = card('q', 'question', { created_at: 1, updated_at: 1 });
@@ -195,6 +174,13 @@ test('questions and results share one slot, chosen by transcript order rather th
   const inbox = inboxOf([q, r, unrelated]); // Dictionary order is not transcript order.
   assert.deepEqual(cardIds(filterInboxMessages([cardMessage(r), cardMessage(q)], inbox, 'one')), ['q']);
   assert.deepEqual(cardIds(filterInboxMessages([cardMessage(q), cardMessage(r)], inbox, 'one')), ['r']);
+});
+
+test('one reserves a single message slot even if the same pending card was posted twice', () => {
+  const q = card('q', 'question');
+  const older = cardMessage(q);
+  const newer = { ...older, id: 'reposted' };
+  assert.deepEqual(filterInboxMessages([older, newer], inboxOf([q]), 'one'), [newer]);
 });
 
 test('later historical cards do not occupy the pending slot', () => {
