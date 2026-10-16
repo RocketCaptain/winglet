@@ -83,6 +83,8 @@ export function ChatView({ server, chatId, showBack, embedded }: { server: Serve
   const [, forceTick] = useState(0);
   const [headerH, setHeaderH] = useState(insets.top + 64);
   const [composerH, setComposerH] = useState(80);
+  // The message box lifts above the keyboard on Android; the list needs matching room.
+  const [composerLift, setComposerLift] = useState(0);
   const [menu, setMenu] = useState(false);
   const [selected, setSelected] = useState<Message | null>(null);
   const [selectText, setSelectText] = useState<string | null>(null);
@@ -146,7 +148,7 @@ export function ChatView({ server, chatId, showBack, embedded }: { server: Serve
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <BlurTargetView ref={target} style={{ flex: 1 }}>
         <MessageList server={server} chatId={chatId} messages={shown} loaded={!!loaded || !!messages?.length}
-          typing={typing} top={headerH} bottom={composerH} onOpen={setSelected} onReply={reply} focus={focus}
+          typing={typing} top={headerH} bottom={composerH + composerLift} onOpen={setSelected} onReply={reply} focus={focus}
           offline={view.kind !== 'online' && view.kind !== 'connecting'} />
       </BlurTargetView>
       <View style={s.headerWrap} onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)} pointerEvents="box-none">
@@ -172,7 +174,7 @@ export function ChatView({ server, chatId, showBack, embedded }: { server: Serve
         {goal ? <GoalStrip goal={goal} onPress={() => setGoalOpen(true)} /> : null}
       </View>
       <Composer server={server} chatId={chatId} busy={typing} bottomInset={embedded ? 12 : insets.bottom} target={target}
-        onHeight={setComposerH} placeholder={main || chat?.kind === 'home' ? `Message ${server.bot.title}` : `Message #${chat?.title ?? 'chat'}`} />
+        onHeight={setComposerH} onBottomChange={setComposerLift} placeholder={main || chat?.kind === 'home' ? `Message ${server.bot.title}` : `Message #${chat?.title ?? 'chat'}`} />
       <ChatMenu server={server} chatId={chatId} title={title} visible={menu} onClose={() => setMenu(false)}
         onGoal={goalsSupported && chat?.kind !== 'home' ? () => setGoalOpen(true) : undefined} hasGoal={!!goal && goal.status !== 'done'}
         onFiles={runtime?.info?.features?.files ? () => setFilesOpen(true) : undefined} onDeleted={() => router.replace('/chats')} />

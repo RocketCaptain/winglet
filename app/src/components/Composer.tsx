@@ -3,7 +3,7 @@ import {
 } from 'expo-audio';
 import { Image } from 'expo-image';
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation, FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, ZoomIn,
@@ -11,6 +11,7 @@ import Animated, {
 import { attachFiles, canSend, removeFile, retryFile, sendDraft } from '../lib/attach';
 import { loadCommands, matchCommands, type Command } from '../lib/commands';
 import { haptic } from '../lib/haptics';
+import { composerBottom as composerBottomInset, handlesKeyboardOffset } from '../lib/keyboard';
 import { formatDuration, pickFiles, pickMedia, takePhoto, type PickedFile } from '../lib/media';
 import { easeOut, useReducedMotion } from '../lib/motion';
 import { usePrefs } from '../lib/prefs';
@@ -34,6 +35,8 @@ type Props = {
   bottomInset: number;
   target: RefObject<View | null>;
   onHeight: (h: number) => void;
+  /** How far the box has moved up from the bottom of the screen, for the message list to clear. */
+  onBottomChange?: (bottom: number) => void;
   placeholder: string;
 };
 
@@ -48,7 +51,7 @@ export function focusComposer(serverId: string, chatId: string) {
   setTimeout(() => focusers.get(draftKey(serverId, chatId))?.(), 320);
 }
 
-export function Composer({ server, chatId, busy, bottomInset, target, onHeight, placeholder }: Props) {
+export function Composer({ server, chatId, busy, bottomInset, target, onHeight, onBottomChange, placeholder }: Props) {
   const t = useTheme();
   const s = useStyles();
   const key = draftKey(server.id, chatId);
@@ -69,6 +72,22 @@ export function Composer({ server, chatId, busy, bottomInset, target, onHeight, 
   const setText = (value: string) => setDraft(server.id, chatId, value);
   const uploads = features?.uploads !== false;
   const voice = features?.voice !== false;
+  // On Android the keyboard draws over the box rather than shrinking the window, so the box
+  // tracks it itself. iOS keeps KeyboardAvoidingView's padding, which works there.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (!handlesKeyboardOffset) return;
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKeyboardHeight(e.endCoordinates?.height ?? 0));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
+  const bottom = composerBottomInset(keyboardHeight, bottomInset);
+
+  useEffect(() => {
+    onBottomChange?.(bottom);
+  }, [bottom, onBottomChange]);
 
   useEffect(() => {
     loadCommands(server).then(setCommands);
@@ -181,7 +200,7 @@ export function Composer({ server, chatId, busy, bottomInset, target, onHeight, 
   };
 
   return (
-    <View style={[s.wrap, { paddingBottom: Math.max(bottomInset, 10) }]} onLayout={(e) => onHeight(e.nativeEvent.layout.height)} pointerEvents="box-none">
+    <View style={[s.wrap, { bottom, paddingBottom: Math.max(bottom, 10) }]} onLayout={(e) => onHeight(e.nativeEvent.layout.height)} pointerEvents="box-none">
       {matches.length ? (
         <Glass target={target} style={s.commands}>
           <ScrollView style={{ maxHeight: 316 }} keyboardShouldPersistTaps="handled" accessibilityLabel="Commands">
