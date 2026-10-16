@@ -7,6 +7,7 @@ import { useLock } from '../lib/appLock';
 import { haptic } from '../lib/haptics';
 import { spring, useReducedMotion } from '../lib/motion';
 import { makeStyles, useTheme } from '../lib/themeContext';
+import { useKeyboardOffset } from '../lib/useKeyboardOffset';
 import { Glass } from './Glass';
 
 /**
@@ -19,6 +20,7 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const wide = width >= 700;
+  const keyboardHeight = useKeyboardOffset();
   const reduced = useReducedMotion();
   const locked = useLock((st) => st.locked);
   const [mounted, setMounted] = useState(visible);
@@ -59,7 +61,8 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
         </Animated.View>
         <View style={[s.host, wide && s.hostWide]} pointerEvents="box-none">
           <GestureDetector gesture={pan}>
-            <Animated.View style={[s.panel, wide && s.panelWide, panel]} accessibilityViewIsModal>
+            {/* The nav bar is already padding inside the panel, so only the keyboard lifts it. */}
+            <Animated.View style={[s.panel, wide && s.panelWide, { bottom: wide ? 0 : keyboardHeight }, panel]} accessibilityViewIsModal>
               <Glass style={[s.glass, wide && { borderRadius: t.radius.xl }, { paddingBottom: wide ? 20 : insets.bottom + 16 }]}>
                 {wide ? null : <View style={s.grabber} />}
                 {title ? <Text style={s.title} accessibilityRole="header">{title}</Text> : null}

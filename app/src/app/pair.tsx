@@ -14,6 +14,7 @@ import { useApp } from '../lib/store';
 import { BRAND } from '../lib/theme';
 import { makeStyles, useTheme } from '../lib/themeContext';
 import { easeOut } from '../lib/motion';
+import { useKeyboardOffset } from '../lib/useKeyboardOffset';
 
 const FEATURES = [
   { icon: ServerIcon, title: 'Runs on your machine', text: 'Your Hermes agents, your models, your data.' },
@@ -25,6 +26,7 @@ export default function PairScreen() {
   const t = useTheme();
   const s = useStyles();
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardOffset();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ code?: string; url?: string; fp?: string }>();
   const hasServers = useApp((st) => st.servers.length > 0);
@@ -98,7 +100,7 @@ export default function PairScreen() {
           <Rect x={0} y={0} width={width} height={560} fill="url(#g2)" />
         </Svg>
       </View>
-      <ScrollView contentContainerStyle={[s.scroll, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ marginBottom: keyboardHeight }} contentContainerStyle={[s.scroll, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
         {hasServers ? (
           <IconButton label="Back" variant="filled" style={{ alignSelf: 'flex-start' }} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}>
             <ChevronLeft size={24} color={t.colors.text} />

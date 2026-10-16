@@ -25,6 +25,7 @@ import { usePrefs } from '../../lib/prefs';
 import { homeChat, useApp, useServerState } from '../../lib/store';
 import { WIDE_BREAKPOINT } from '../../lib/theme';
 import { makeStyles, useTheme } from '../../lib/themeContext';
+import { useKeyboardOffset } from '../../lib/useKeyboardOffset';
 import type { Chat, GoalEntry, InboxItem, Server } from '../../lib/types';
 
 function pairFromHash(): { code: string; fp?: string } | null {
@@ -62,6 +63,7 @@ function HomeFor({ server }: { server: Server }) {
   const t = useTheme();
   const s = useStyles();
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardOffset();
   const tabSpace = useTabBarSpace();
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
@@ -96,6 +98,7 @@ function HomeFor({ server }: { server: Server }) {
   return (
     <View style={s.root}>
       <ScrollView
+        style={{ marginBottom: keyboardHeight }}
         contentContainerStyle={[s.scroll, { paddingTop: insets.top + 8, paddingBottom: tabSpace + 16 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={t.colors.accent} colors={[t.colors.accentFill]} progressBackgroundColor={t.colors.surfaceRaised} />}
         keyboardShouldPersistTaps="handled"

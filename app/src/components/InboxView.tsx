@@ -15,6 +15,7 @@ import { InboxCard } from './InboxCards';
 import { useTabBarSpace } from './TabBar';
 import { Chip, Segmented } from './ui';
 import { easeOut } from '../lib/motion';
+import { useKeyboardOffset } from '../lib/useKeyboardOffset';
 
 type Entry = { server: Server; item: InboxItem };
 
@@ -23,6 +24,7 @@ export function InboxView() {
   const t = useTheme();
   const s = useStyles();
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardOffset();
   const tabSpace = useTabBarSpace();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ item?: string; server?: string }>();
@@ -68,6 +70,7 @@ export function InboxView() {
   return (
     <View style={s.root}>
       <FlatList
+        style={{ marginBottom: keyboardHeight }}
         ref={list}
         data={entries}
         keyExtractor={(e) => `${e.server.id}:${e.item.id}`}

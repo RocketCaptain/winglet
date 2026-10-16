@@ -4,6 +4,7 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { haptic } from '../lib/haptics';
 import { makeStyles, useTheme } from '../lib/themeContext';
+import { useKeyboardOffset } from '../lib/useKeyboardOffset';
 import { ChevronLeft } from './icons';
 import { IconButton } from './ui';
 
@@ -16,6 +17,7 @@ export function Screen({ title, subtitle, children, right, onRefresh }: {
   const t = useTheme();
   const s = useStyles();
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardOffset();
   const [refreshing, setRefreshing] = useState(false);
   const refresh = async () => {
     haptic.soft();
@@ -28,7 +30,7 @@ export function Screen({ title, subtitle, children, right, onRefresh }: {
   };
   return (
     <View style={s.root}>
-      <ScrollView contentContainerStyle={[s.content, { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled"
+      <ScrollView style={{ marginBottom: keyboardHeight }} contentContainerStyle={[s.content, { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled"
         refreshControl={onRefresh ? (
           <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={t.colors.accent} colors={[t.colors.accentFill]}
             progressBackgroundColor={t.colors.surfaceRaised} />
