@@ -1,10 +1,10 @@
 import { Text } from 'react-native';
 import { Screen } from '../components/Screen';
-import { ListGroup, ListRow, SectionHeader, Segmented } from '../components/ui';
+import { SectionHeader, Segmented } from '../components/ui';
 import { usePrefs, type Prefs } from '../lib/prefs';
 import { makeStyles } from '../lib/themeContext';
 
-/** How much of the agent's background work shows in the chat. Every change applies at once. */
+/** Which pending questions and results show in the chat. Every change applies at once. */
 export default function ActivityScreen() {
   const s = useStyles();
   const prefs = usePrefs((st) => st.prefs);
@@ -13,16 +13,17 @@ export default function ActivityScreen() {
 
   return (
     <Screen title="Chat activity" subtitle="Changes apply straight away and stay on this device.">
-      <SectionHeader title="Background work" />
+      <SectionHeader title="Questions and results" />
       <Segmented label="Chat activity" value={prefs.activity} onChange={set('activity')} options={[
-        { value: 'full', label: 'All steps' },
+        { value: 'full', label: 'All' },
         { value: 'one', label: 'Latest only' },
         { value: 'off', label: 'Hidden' },
       ]} />
       <Text style={s.note}>
-        {prefs.activity === 'full' ? 'Background steps are grouped in a collapsed row. Tap to see them all.'
-          : prefs.activity === 'one' ? 'Only the latest background step is shown, updating as your agent works.'
-            : 'Background activity is hidden from the chat.'}
+        {prefs.activity === 'full' ? 'Every question and result the agent posts shows in the chat.'
+          : prefs.activity === 'one' ? 'Only the latest unanswered question shows at a time. Pending results share that slot.'
+            : 'Questions and results are kept out of the chat.'}
+        {' Answered and expired cards stay in the chat. Approval requests always appear, whatever this is set to.'}
       </Text>
     </Screen>
   );

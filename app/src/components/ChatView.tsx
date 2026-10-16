@@ -15,7 +15,7 @@ import { connectionView } from '../lib/connection';
 import { clearFocus, requestFocus, useFocusRequest } from '../lib/focus';
 import { haptic } from '../lib/haptics';
 import { afterOlderPage, atStart, canLoadOlder, newPaging } from '../lib/history';
-import { chatMessages, groupActivity, isActivity, type Entry } from '../lib/messages';
+import { chatMessages, filterInboxMessages, groupActivity, isActivity, type Entry } from '../lib/messages';
 import { useModelSheet } from '../lib/modelSheet';
 import { easeOut, spring, useReducedMotion } from '../lib/motion';
 import { usePrefs } from '../lib/prefs';
@@ -249,7 +249,7 @@ function MessageList({ server, chatId, messages, loaded, typing, top, bottom, on
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
     // Hermes's backend activity (tool calls, status notes) folds into one "…" entry between the replies.
-    const entries = groupActivity(messages, typing, { activity });
+    const entries = groupActivity(filterInboxMessages(messages, inbox, activity), typing);
     const idOf = (e: Entry) => (e.kind === 'msg' ? e.m.id : e.id);
     const timeOf = (e: Entry) => (e.kind === 'msg' ? e.m.created_at : e.items[0].created_at);
     const days = entries.map((e) => dayKey(timeOf(e)));
@@ -281,7 +281,7 @@ function MessageList({ server, chatId, messages, loaded, typing, top, bottom, on
       });
     });
     return out.reverse(); // inverted: newest at the bottom without manual scrolling
-  }, [messages, typing, today, activity]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [messages, inbox, typing, today, activity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rowsRef = useRef(rows);
   rowsRef.current = rows;

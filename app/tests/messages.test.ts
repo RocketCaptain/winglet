@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { activityKind, chatMessages, groupActivity, inSheet, isActivity, markFailed, mergeMessages } from '../src/lib/messages.ts';
-import type { Message } from '../src/lib/types.ts';
+import { activityKind, chatMessages, filterInboxMessages, groupActivity, inSheet, isActivity, markFailed, mergeMessages } from '../src/lib/messages.ts';
+import type { InboxItem, Message } from '../src/lib/types.ts';
 
 const msg = (id: string, over: Partial<Message> = {}): Message => ({
   id, chat_id: 'general', role: 'bot', text: id, status: 'final', meta: {}, created_at: 1, updated_at: 1, ...over,
@@ -102,57 +102,122 @@ test('runs of activity fold into one entry between the replies', () => {
   assert.equal(groupActivity([]).length, 0);
 });
 
-for (const activity of ['full', 'one', 'off'] as const) {
-  test(`${activity} activity keeps ordinary messages and filters each run of steps`, () => {
-    const u = say('u', 'find cats', { role: 'user' });
-    const p1 = say('p1', '🔍 web_search: "cats"');
-    const p2 = say('p2', '📖 read_file: "a.md"');
-    const r = say('r', 'Found three.');
-    const p3 = say('p3', '💻 terminal: "ls"');
-    const u2 = say('u2', 'thanks', { role: 'user' });
-    const p4 = say('p4', 'Reading notes', { role: 'system', meta: { status_key: 'notes' } });
-    const p5 = say('p5', 'Running tests', { meta: { activity: true } });
-    const list = [u, p1, p2, r, p3, u2, p4, p5];
-    const expected = activity === 'off' ? [
-      { kind: 'msg', m: u }, { kind: 'msg', m: r }, { kind: 'msg', m: u2 },
-    ] : [
-      { kind: 'msg', m: u },
-      { kind: 'activity', id: 'p1', items: activity === 'one' ? [p2] : [p1, p2] },
-      { kind: 'msg', m: r },
-      { kind: 'activity', id: 'p3', items: [p3] },
-      { kind: 'msg', m: u2 },
-      { kind: 'activity', id: 'p4', items: activity === 'one' ? [p5] : [p4, p5] },
-    ];
-    for (const typing of [false, true]) {
-      const out = groupActivity(list, typing, { activity });
-      assert.deepEqual(out, expected);
-      assert.deepEqual(out.filter((e) => e.kind === 'msg').map((e) => e.m), [u, r, u2]);
-      if (activity === 'full') assert.deepEqual(out, groupActivity(list, typing));
-    }
-    assert.deepEqual(groupActivity([], false, { activity }), []);
+test('grouping preserves ambiguous answers and streaming replies', () => {
+  const u = say('u', 'what should I read?', { role: 'user' });
+  const friendly = say('p', '📖 Reading skill pdf');
+  const streaming = say('r', '📖 Reading list for this week', { status: 'streaming' });
+  const system = say('s', 'Only an owner can use that.', { role: 'system' });
+  const list = [u, streaming, system, friendly];
+  assert.deepEqual(groupActivity(list), list.map((m) => ({ kind: 'msg', m })));
+  assert.deepEqual(groupActivity(list, true), [
+    { kind: 'msg', m: u }, { kind: 'msg', m: streaming }, { kind: 'msg', m: system },
+    { kind: 'activity', id: 'p', items: [friendly] },
+  ]);
+});
+
+const card = (id: string, kind: InboxItem['kind'], over: Partial<InboxItem> = {}): InboxItem => ({
+  id, kind, chat_id: 'general', title: id, body: id, payload: {}, status: 'pending', resolution: '',
+  created_at: 1, updated_at: 1, ...over,
+});
+const cardMessage = (item: InboxItem) => msg(`message-${item.id}`, {
+  role: 'system', meta: { inbox_id: item.id },
+});
+const inboxOf = (items: InboxItem[]) => Object.fromEntries(items.map((item) => [item.id, item]));
+const cardIds = (messages: Message[]) => messages.map((m) => m.meta.inbox_id);
+
+for (const mode of ['full', 'one', 'off'] as const) {
+  test(`approval cards always appear in ${mode}, alongside pending questions and results`, () => {
+    // Both sides of the shared slot: approvals neither take it nor get displaced by it.
+    const items = [card('a1', 'approval'), card('q', 'question'), card('r', 'result'), card('a2', 'approval')];
+    const visible = filterInboxMessages(items.map(cardMessage), inboxOf(items), mode);
+    assert.deepEqual(cardIds(visible), mode === 'full' ? ['a1', 'q', 'r', 'a2']
+      : mode === 'one' ? ['a1', 'r', 'a2'] : ['a1', 'a2']);
   });
 
-  test(`${activity} activity preserves ambiguous answers and streaming replies`, () => {
-    const u = say('u', 'what should I read?', { role: 'user' });
-    const friendly = say('p', '📖 Reading skill pdf');
-    const streaming = say('r', '📖 Reading list for this week', { status: 'streaming' });
-    const system = say('s', 'Only an owner can use that.', { role: 'system' });
-    const list = [u, streaming, system, friendly];
-    assert.deepEqual(groupActivity(list, false, { activity }), list.map((m) => ({ kind: 'msg', m })));
-    const out = groupActivity(list, true, { activity });
-    assert.deepEqual(out.filter((e) => e.kind === 'msg').map((e) => e.m), [u, streaming, system]);
-    assert.deepEqual(out.filter((e) => e.kind === 'activity'), activity === 'off' ? [] : [{ kind: 'activity', id: 'p', items: [friendly] }]);
+  for (const kind of ['question', 'result'] as const) {
+    test(`${mode} shows the expected pending ${kind} cards`, () => {
+      const items = [card('old', kind), card('middle', kind), card('new', kind)];
+      const messages = items.map(cardMessage);
+      assert.deepEqual(cardIds(filterInboxMessages(messages, inboxOf(items), mode)),
+        mode === 'full' ? ['old', 'middle', 'new'] : mode === 'one' ? ['new'] : []);
+    });
+  }
+
+  test(`answered and expired cards remain visible in ${mode}`, () => {
+    const items = (['approval', 'question', 'result'] as const).flatMap((kind) =>
+      (['resolved', 'expired'] as const).map((status) => card(`${kind}-${status}`, kind, { status, resolution: 'yes' })));
+    items.push(card('pending', 'question'));
+    const visible = filterInboxMessages(items.map(cardMessage), inboxOf(items), mode);
+    assert.deepEqual(cardIds(visible), [...items.slice(0, -1).map((item) => item.id), ...(mode === 'off' ? [] : ['pending'])]);
+  });
+
+  test(`${mode} safely preserves ordinary messages and cards whose inbox data has not loaded`, () => {
+    const messages = [msg('user', { role: 'user' }), msg('reply'), msg('notice', { role: 'system' }),
+      msg('missing', { role: 'system', meta: { inbox_id: 'not-loaded', kind: 'question' } })];
+    assert.deepEqual(filterInboxMessages([], {}, mode), []);
+    assert.deepEqual(filterInboxMessages(messages, {}, mode), messages);
+    assert.deepEqual(filterInboxMessages(messages, undefined, mode), messages);
+  });
+
+  test(`progress rows retain every step and replies stay interleaved in ${mode}`, () => {
+    const items = [card('q', 'question'), card('a', 'approval')];
+    const p1 = say('p1', 'Running tests', { meta: { activity: true } });
+    const p2 = say('p2', 'Reading results', { meta: { activity: true } });
+    const reply = msg('reply');
+    const [q, a] = items.map(cardMessage);
+    const messages = [p1, p2, q, reply, a];
+    assert.deepEqual(groupActivity(filterInboxMessages(messages, inboxOf(items), mode), true), [
+      { kind: 'activity', id: 'p1', items: [p1, p2] },
+      ...(mode === 'off' ? [] : [{ kind: 'msg', m: q }]),
+      { kind: 'msg', m: reply }, { kind: 'msg', m: a },
+    ]);
   });
 }
 
-test('latest activity replaces the step while keeping a stable row id and the input intact', () => {
-  const p1 = say('p1', 'Running tests', { meta: { activity: true } });
-  const p2 = say('p2', 'Reading results', { meta: { activity: true } });
-  const list = [p1, p2];
-  assert.deepEqual(groupActivity(list.slice(0, 1), true, { activity: 'one' }), [{ kind: 'activity', id: 'p1', items: [p1] }]);
-  assert.deepEqual(groupActivity(list, true, { activity: 'one' }), [{ kind: 'activity', id: 'p1', items: [p2] }]);
-  assert.deepEqual(groupActivity(list, true, {}), groupActivity(list, true));
-  assert.deepEqual(list, [p1, p2]);
+test('full is the default for inbox cards', () => {
+  const items = [card('q1', 'question'), card('q2', 'question'), card('r', 'result')];
+  const messages = items.map(cardMessage);
+  assert.deepEqual(filterInboxMessages(messages, inboxOf(items)), messages);
+});
+
+test('approvals remain beside the latest pending question without occupying its slot', () => {
+  const items = [card('q1', 'question'), card('a1', 'approval'), card('q2', 'question'), card('a2', 'approval')];
+  const messages = items.map(cardMessage);
+  const inbox = inboxOf(items);
+  assert.deepEqual(cardIds(filterInboxMessages(messages.slice(0, 2), inbox, 'one')), ['q1', 'a1']);
+  assert.deepEqual(cardIds(filterInboxMessages(messages, inbox, 'one')), ['a1', 'q2', 'a2']);
+});
+
+test('questions and results share one slot, chosen by transcript order rather than item update time', () => {
+  const r = card('r', 'result', { created_at: 100, updated_at: 200 });
+  const q = card('q', 'question', { created_at: 1, updated_at: 1 });
+  const unrelated = card('other-chat', 'question', { chat_id: 'other', created_at: 999 });
+  const inbox = inboxOf([q, r, unrelated]); // Dictionary order is not transcript order.
+  assert.deepEqual(cardIds(filterInboxMessages([cardMessage(r), cardMessage(q)], inbox, 'one')), ['q']);
+  assert.deepEqual(cardIds(filterInboxMessages([cardMessage(q), cardMessage(r)], inbox, 'one')), ['r']);
+});
+
+test('later historical cards do not occupy the pending slot', () => {
+  const items = [card('pending', 'question'), card('answered', 'result', { status: 'resolved' }),
+    card('expired', 'question', { status: 'expired' })];
+  const messages = items.map(cardMessage);
+  assert.deepEqual(filterInboxMessages(messages, inboxOf(items), 'one'), messages);
+});
+
+test('a new pending card replaces the slot and resolved cards return to the transcript', () => {
+  const q1 = card('q1', 'question');
+  const q2 = card('q2', 'question');
+  const messages = Object.freeze([cardMessage(q1), cardMessage(q2)]);
+  const inbox = Object.freeze(inboxOf([Object.freeze(q1), Object.freeze(q2)]));
+  assert.deepEqual(cardIds(filterInboxMessages(messages.slice(0, 1), inbox, 'one')), ['q1']);
+  assert.deepEqual(cardIds(filterInboxMessages(messages, inbox, 'one')), ['q2']);
+  const answered: Record<string, InboxItem> = { ...inbox, q1: { ...q1, status: 'resolved', resolution: 'yes' } };
+  assert.deepEqual(cardIds(filterInboxMessages(messages, answered, 'one')), ['q1', 'q2']);
+  assert.deepEqual(cardIds(filterInboxMessages(messages, answered, 'off')), ['q1']);
+  answered.q2 = { ...q2, status: 'resolved', resolution: 'yes' };
+  assert.deepEqual(cardIds(filterInboxMessages(messages, answered, 'off')), ['q1', 'q2']);
+  assert.equal(inbox.q1.status, 'pending');
+  assert.equal(inbox.q2.status, 'pending');
 });
 
 test("the model sheet's pickers stay out of the chat, and only the reasoning card it asked for", () => {

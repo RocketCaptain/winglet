@@ -50,7 +50,7 @@ export default function AgentTab() {
   const parent = child ? servers.find((x) => x.id === server.parent) : undefined;
   const view = connectionView(network, rt, server.bot.title);
   const themeLabel = prefs.theme === 'system' ? 'System' : prefs.theme === 'dark' ? 'Dark' : 'Light';
-  const activityLabel = prefs.activity === 'full' ? 'All steps' : prefs.activity === 'one' ? 'Latest only' : 'Hidden';
+  const activityLabel = prefs.activity === 'full' ? 'All' : prefs.activity === 'one' ? 'Latest only' : 'Hidden';
 
   return (
     <View style={s.root}>

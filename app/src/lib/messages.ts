@@ -1,4 +1,4 @@
-import type { Message } from './types';
+import type { InboxItem, Message } from './types';
 import type { Prefs } from './prefs';
 
 const isLocal = (m: Message) => m.status === 'pending' || m.status === 'queued' || m.status === 'failed';
@@ -90,9 +90,8 @@ export type Entry = { kind: 'msg'; m: Message } | { kind: 'activity'; id: string
  * The messages as the chat shows them: runs of backend activity folded into one entry, the replies as they are.
  * A "maybe" message folds when the reply it led up to comes after it, or while the bot is still working on it
  * (`typing`) and nothing from you comes after it. A turn that ended on one keeps it visible: it may be the answer.
- * The activity preference keeps every step, only the latest in each run, or none.
  */
-export function groupActivity(messages: readonly Message[], typing = false, { activity = 'full' }: { activity?: Prefs['activity'] } = {}): Entry[] {
+export function groupActivity(messages: readonly Message[], typing = false): Entry[] {
   const hidden = new Set<string>();
   let answered = false; // a real reply later in the same turn
   let open = true; // no message from you later: this is the turn still in progress
@@ -109,14 +108,31 @@ export function groupActivity(messages: readonly Message[], typing = false, { ac
       out.push({ kind: 'msg', m });
       continue;
     }
-    if (activity === 'off') continue;
     const last = out[out.length - 1];
-    if (last?.kind === 'activity') {
-      if (activity === 'one') last.items = [m];
-      else last.items.push(m);
-    } else out.push({ kind: 'activity', id: m.id, items: [m] });
+    if (last?.kind === 'activity') last.items.push(m);
+    else out.push({ kind: 'activity', id: m.id, items: [m] });
   }
   return out;
+}
+
+/**
+ * Only pending questions and results share the activity preference's slot, in transcript order.
+ * Approvals always stay visible and never take the slot. Resolved/expired cards stay in history;
+ * missing inbox data keeps the message visible until its item arrives.
+ */
+export function filterInboxMessages(messages: readonly Message[], inbox: Readonly<Record<string, InboxItem>> | undefined, mode: Prefs['activity'] = 'full'): Message[] {
+  let latest: string | undefined;
+  if (mode === 'one') {
+    for (const m of messages) {
+      const item = m.meta?.inbox_id ? inbox?.[m.meta.inbox_id] : undefined;
+      if (item && item.kind !== 'approval' && item.status === 'pending') latest = item.id;
+    }
+  }
+  return messages.filter((m) => {
+    const item = m.meta?.inbox_id ? inbox?.[m.meta.inbox_id] : undefined;
+    return !item || item.kind === 'approval' || item.status !== 'pending'
+      || mode === 'full' || (mode === 'one' && item.id === latest);
+  });
 }
 
 type SheetSlot = { before: readonly string[]; claimed?: string; until: number };
