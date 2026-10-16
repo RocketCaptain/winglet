@@ -200,7 +200,7 @@ export function Composer({ server, chatId, busy, bottomInset, target, onHeight, 
   };
 
   return (
-    <View style={[s.wrap, { bottom, paddingBottom: Math.max(bottom, 10) }]} onLayout={(e) => onHeight(e.nativeEvent.layout.height)} pointerEvents="box-none">
+    <View style={[s.wrap, { bottom, paddingBottom: Math.max(bottomInset, 10) }]} onLayout={(e) => onHeight(e.nativeEvent.layout.height)} pointerEvents="box-none">
       {matches.length ? (
         <Glass target={target} style={s.commands}>
           <ScrollView style={{ maxHeight: 316 }} keyboardShouldPersistTaps="handled" accessibilityLabel="Commands">
