@@ -32,18 +32,19 @@ export const handlesKeyboardOffset = detectEdgeToEdge();
 /**
  * The bottom inset for the composer.
  *
- * React Native reports the keyboard height EXCLUDING the navigation bar (in
- * `ReactRootView.checkForKeyboardEvents` it is `imeInsets.bottom - barInsets.bottom`), so the
- * composer's own safe-area inset has to be added back on: the box sits above both the keyboard
- * and the navigation bar underneath it.
+ * Two things stack below the box, and each belongs in exactly one place:
  *
- * With no keyboard, the box sits at the bottom of the window, which is already drawn behind the
- * navigation bar, so the inset applies once.
+ *   - The navigation bar. The window is drawn edge-to-edge behind it, so the box must clear it with
+ *     `paddingBottom` (a visible gap). It is deliberately NOT part of `bottom`.
+ *   - The keyboard, which sits above the navigation bar. React Native reports its height excluding
+ *     the bar (`imeInsets.bottom - barInsets.bottom`), so the reported value is used as-is.
+ *
+ * Putting the navigation bar in both `bottom` and the padding leaves a gap one bar-height tall under
+ * the box, which follows the keyboard up. Each inset is counted once and only once.
  */
 export function composerBottom(keyboardHeight: number, baseInset: number): number {
   if (!handlesKeyboardOffset) return baseInset;
-  if (keyboardHeight > 0) return keyboardHeight + baseInset;
-  return baseInset;
+  return Math.max(0, keyboardHeight);
 }
 
 /**

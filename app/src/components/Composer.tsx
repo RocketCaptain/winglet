@@ -83,7 +83,10 @@ export function Composer({ server, chatId, busy, bottomInset, target, onHeight, 
     return () => { show.remove(); hide.remove(); };
   }, []);
 
+  // `bottom` lifts the box over the keyboard only; `bottomInset` (the navigation bar) is applied as
+  // padding below the box. Adding the bar to both leaves a bar-height gap that tracks the keyboard.
   const bottom = composerBottomInset(keyboardHeight, bottomInset);
+  const padBottom = handlesKeyboardOffset ? Math.max(bottomInset, 10) : Math.max(bottom, 10);
 
   useEffect(() => {
     onBottomChange?.(bottom);
@@ -200,7 +203,7 @@ export function Composer({ server, chatId, busy, bottomInset, target, onHeight, 
   };
 
   return (
-    <View style={[s.wrap, { bottom, paddingBottom: Math.max(bottomInset, 10) }]} onLayout={(e) => onHeight(e.nativeEvent.layout.height)} pointerEvents="box-none">
+    <View style={[s.wrap, { bottom, paddingBottom: padBottom }]} onLayout={(e) => onHeight(e.nativeEvent.layout.height)} pointerEvents="box-none">
       {matches.length ? (
         <Glass target={target} style={s.commands}>
           <ScrollView style={{ maxHeight: 316 }} keyboardShouldPersistTaps="handled" accessibilityLabel="Commands">
