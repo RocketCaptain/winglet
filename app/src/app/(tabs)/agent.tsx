@@ -50,6 +50,7 @@ export default function AgentTab() {
   const parent = child ? servers.find((x) => x.id === server.parent) : undefined;
   const view = connectionView(network, rt, server.bot.title);
   const themeLabel = prefs.theme === 'system' ? 'System' : prefs.theme === 'dark' ? 'Dark' : 'Light';
+  const activityLabel = prefs.activity === 'full' ? 'All steps' : prefs.activity === 'one' ? 'Latest only' : 'Hidden';
 
   return (
     <View style={s.root}>
@@ -153,6 +154,7 @@ export default function AgentTab() {
         <SectionHeader title="App" />
         <ListGroup>
           <ListRow icon={<Palette size={18} color={t.colors.onAccentSoft} />} title="Appearance" value={`${themeLabel} · ${ACCENTS[prefs.accent].label}`} onPress={() => router.push('/appearance')} />
+          <ListRow icon={<Activity size={18} color={t.colors.onAccentSoft} />} title="Chat activity" value={activityLabel} onPress={() => router.push('/activity')} />
           <ListRow icon={<Bell size={18} color={t.colors.onAccentSoft} />} title="Notifications" onPress={() => router.push('/notifications')} />
           <ListRow icon={<Info size={18} color={appUpdate ? t.colors.success : t.colors.onAccentSoft} />} iconColor={appUpdate ? t.colors.success : undefined}
             title="About & storage" value={appUpdate ? `Update to ${appUpdate.version}` : undefined} onPress={() => router.push('/about')} />

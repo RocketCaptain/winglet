@@ -83,7 +83,7 @@ function Devices({ server }: { server: Server }) {
           <SectionHeader title="History" />
           <ListGroup>
             <ListRow icon={<Activity size={18} color={t.colors.onAccentSoft} />} title="Activity"
-              subtitle="Pairings, role changes, approvals and refused requests" onPress={() => router.push('/activity')} />
+              subtitle="Pairings, role changes, approvals and refused requests" onPress={() => router.push('/audit')} />
           </ListGroup>
         </>
       ) : null}

@@ -7,6 +7,8 @@ export type Prefs = {
   accent: AccentName;
   /** Bubbles: your messages in accent bubbles, replies unboxed. Compact: everything left-aligned. */
   layout: 'bubbles' | 'compact';
+  /** How much of the agent's background work shows in the chat. */
+  activity: 'full' | 'one' | 'off';
   /** "system" follows the phone's accessibility setting. */
   motion: 'system' | 'reduce' | 'full';
   transparency: 'system' | 'reduce' | 'full';
@@ -22,7 +24,7 @@ export type Prefs = {
 };
 
 export const DEFAULT_PREFS: Prefs = {
-  theme: 'system', accent: 'iris', layout: 'bubbles', motion: 'system', transparency: 'system', haptics: true, busyMode: 'steer', appLock: false, updateCheck: true, mainBot: '',
+  theme: 'system', accent: 'iris', layout: 'bubbles', activity: 'full', motion: 'system', transparency: 'system', haptics: true, busyMode: 'steer', appLock: false, updateCheck: true, mainBot: '',
 };
 
 const KEY = 'winglet.prefs';

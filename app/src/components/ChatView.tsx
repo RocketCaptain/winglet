@@ -236,6 +236,7 @@ function MessageList({ server, chatId, messages, loaded, typing, top, bottom, on
   const loadMessages = useApp((st) => st.loadMessages);
   const inbox = useApp((st) => st.runtime[server.id]?.inbox);
   const layout = usePrefs((st) => st.prefs.layout);
+  const activity = usePrefs((st) => st.prefs.activity);
   const list = useRef<FlatList<Row>>(null);
   // Scrolled away from the latest: the newest message then, so only later ones count as new.
   const [away, setAway] = useState<string | null>(null);
@@ -248,7 +249,7 @@ function MessageList({ server, chatId, messages, loaded, typing, top, bottom, on
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
     // Hermes's backend activity (tool calls, status notes) folds into one "…" entry between the replies.
-    const entries = groupActivity(messages, typing);
+    const entries = groupActivity(messages, typing, { activity });
     const idOf = (e: Entry) => (e.kind === 'msg' ? e.m.id : e.id);
     const timeOf = (e: Entry) => (e.kind === 'msg' ? e.m.created_at : e.items[0].created_at);
     const days = entries.map((e) => dayKey(timeOf(e)));
@@ -280,7 +281,7 @@ function MessageList({ server, chatId, messages, loaded, typing, top, bottom, on
       });
     });
     return out.reverse(); // inverted: newest at the bottom without manual scrolling
-  }, [messages, typing, today]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [messages, typing, today, activity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
@@ -405,7 +406,7 @@ function MessageList({ server, chatId, messages, loaded, typing, top, bottom, on
         data={rows}
         keyExtractor={(r) => r.key}
         renderItem={({ item }) => item.kind === 'day' ? <DayChip label={item.label} /> : item.kind === 'activity' ? (
-          <ActivityRow items={item.items} working={item.working} flash={flash !== null && item.items.some((m) => m.id === flash)} />
+          <ActivityRow items={item.items} working={item.working} latestOnly={activity === 'one'} flash={flash !== null && item.items.some((m) => m.id === flash)} />
         ) : (
           <MessageRow server={server} message={item.m} first={item.first} last={item.last} live={item.live} fresh={item.fresh}
             layout={layout} flash={flash === item.m.id} actions={actions}
@@ -759,15 +760,20 @@ function Cursor({ onAccent }: { onAccent: boolean }) {
 }
 
 /**
- * Everything Hermes does that isn't a reply (reading a skill, searching, running a tool) folded into one "…".
- * Tap it to see the steps; by default only the replies show.
+ * Background steps folded into one row, or just the latest step always visible.
+ * Tap the full row to see the steps; by default only the replies show.
  */
-const ActivityRow = memo(function ActivityRow({ items, working, flash }: { items: Message[]; working: boolean; flash: boolean }) {
+const ActivityRow = memo(function ActivityRow({ items, working, latestOnly, flash }: { items: Message[]; working: boolean; latestOnly: boolean; flash: boolean }) {
   const t = useTheme();
   const s = useStyles();
   const [open, setOpen] = useState(false);
   // Jumped to a step in here (from search or a reply): show it.
   useEffect(() => { if (flash) setOpen(true); }, [flash]);
+  if (latestOnly) return (
+    <View style={[s.lane, s.activity]}>
+      <Text selectable numberOfLines={1} style={[s.activityLine, s.activityLatest]}>{items[0].text}</Text>
+    </View>
+  );
   const n = items.length;
   return (
     <View style={[s.lane, s.activity]}>
@@ -901,6 +907,7 @@ const useStyles = makeStyles((t) => ({
   activityText: { ...t.type.caption, color: t.colors.textSecondary },
   activityList: { marginLeft: 34, marginTop: 6, paddingLeft: 10, gap: 3, borderLeftWidth: 2, borderLeftColor: t.colors.border, alignSelf: 'stretch', paddingRight: 8 },
   activityLine: { ...t.type.caption, fontFamily: t.fonts.mono, fontSize: 12, color: t.colors.textSecondary },
+  activityLatest: { marginLeft: 34, alignSelf: 'stretch', paddingRight: 8 },
   typing: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 14 },
   typingBubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: t.radius.pill, backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.border },
   emptyTitle: { ...t.type.title, color: t.colors.text, textAlign: 'center', marginTop: 8 },

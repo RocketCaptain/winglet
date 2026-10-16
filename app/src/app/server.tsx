@@ -146,7 +146,7 @@ export default function ServerScreen() {
         <ListRow icon={<ScrollText size={18} color={t.colors.onAccentSoft} />} title="Logs" subtitle="What Hermes has been doing"
           onPress={() => router.push('/logs')} />
         <ListRow icon={<ShieldCheck size={18} color={t.colors.onAccentSoft} />} title="Activity" subtitle="Who changed what, from which phone"
-          onPress={() => router.push('/activity')} />
+          onPress={() => router.push('/audit')} />
       </ListGroup>
 
       {info?.jobs.length ? (

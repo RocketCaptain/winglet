@@ -102,6 +102,59 @@ test('runs of activity fold into one entry between the replies', () => {
   assert.equal(groupActivity([]).length, 0);
 });
 
+for (const activity of ['full', 'one', 'off'] as const) {
+  test(`${activity} activity keeps ordinary messages and filters each run of steps`, () => {
+    const u = say('u', 'find cats', { role: 'user' });
+    const p1 = say('p1', '🔍 web_search: "cats"');
+    const p2 = say('p2', '📖 read_file: "a.md"');
+    const r = say('r', 'Found three.');
+    const p3 = say('p3', '💻 terminal: "ls"');
+    const u2 = say('u2', 'thanks', { role: 'user' });
+    const p4 = say('p4', 'Reading notes', { role: 'system', meta: { status_key: 'notes' } });
+    const p5 = say('p5', 'Running tests', { meta: { activity: true } });
+    const list = [u, p1, p2, r, p3, u2, p4, p5];
+    const expected = activity === 'off' ? [
+      { kind: 'msg', m: u }, { kind: 'msg', m: r }, { kind: 'msg', m: u2 },
+    ] : [
+      { kind: 'msg', m: u },
+      { kind: 'activity', id: 'p1', items: activity === 'one' ? [p2] : [p1, p2] },
+      { kind: 'msg', m: r },
+      { kind: 'activity', id: 'p3', items: [p3] },
+      { kind: 'msg', m: u2 },
+      { kind: 'activity', id: 'p4', items: activity === 'one' ? [p5] : [p4, p5] },
+    ];
+    for (const typing of [false, true]) {
+      const out = groupActivity(list, typing, { activity });
+      assert.deepEqual(out, expected);
+      assert.deepEqual(out.filter((e) => e.kind === 'msg').map((e) => e.m), [u, r, u2]);
+      if (activity === 'full') assert.deepEqual(out, groupActivity(list, typing));
+    }
+    assert.deepEqual(groupActivity([], false, { activity }), []);
+  });
+
+  test(`${activity} activity preserves ambiguous answers and streaming replies`, () => {
+    const u = say('u', 'what should I read?', { role: 'user' });
+    const friendly = say('p', '📖 Reading skill pdf');
+    const streaming = say('r', '📖 Reading list for this week', { status: 'streaming' });
+    const system = say('s', 'Only an owner can use that.', { role: 'system' });
+    const list = [u, streaming, system, friendly];
+    assert.deepEqual(groupActivity(list, false, { activity }), list.map((m) => ({ kind: 'msg', m })));
+    const out = groupActivity(list, true, { activity });
+    assert.deepEqual(out.filter((e) => e.kind === 'msg').map((e) => e.m), [u, streaming, system]);
+    assert.deepEqual(out.filter((e) => e.kind === 'activity'), activity === 'off' ? [] : [{ kind: 'activity', id: 'p', items: [friendly] }]);
+  });
+}
+
+test('latest activity replaces the step while keeping a stable row id and the input intact', () => {
+  const p1 = say('p1', 'Running tests', { meta: { activity: true } });
+  const p2 = say('p2', 'Reading results', { meta: { activity: true } });
+  const list = [p1, p2];
+  assert.deepEqual(groupActivity(list.slice(0, 1), true, { activity: 'one' }), [{ kind: 'activity', id: 'p1', items: [p1] }]);
+  assert.deepEqual(groupActivity(list, true, { activity: 'one' }), [{ kind: 'activity', id: 'p1', items: [p2] }]);
+  assert.deepEqual(groupActivity(list, true, {}), groupActivity(list, true));
+  assert.deepEqual(list, [p1, p2]);
+});
+
 test("the model sheet's pickers stay out of the chat, and only the reasoning card it asked for", () => {
   const picker = (id: string, kind: 'model' | 'choice') => msg(id, { meta: { picker: { id, kind, status: 'open', expires_at: 9 } } });
   assert.ok(!inSheet(picker('m', 'model'), undefined)); // typed by hand: stays in the chat
